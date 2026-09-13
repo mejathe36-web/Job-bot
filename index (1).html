@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Board — Local & International</title>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --card: #ffffff;
+    --border: #ddd9cf;
+    --text: #2c2c2a;
+    --text-muted: #6b6a64;
+    --accent: #0f6e56;
+    --danger: #a32d2d;
+    --warning: #854f0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0 0 3rem;
+  }
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 1rem;
+    text-align: center;
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .tabs {
+    display: flex;
+    max-width: 700px;
+    margin: 1rem auto 0;
+    padding: 0 1rem;
+    gap: 8px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  main {
+    max-width: 700px;
+    margin: 1.25rem auto 0;
+    padding: 0 1rem;
+  }
+  .job-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .job-card.expired {
+    opacity: 0.5;
+  }
+  .job-title {
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0 0 2px;
+  }
+  .job-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+  }
+  .job-dates {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-left: 6px;
+  }
+  .badge.soon { background: #faeeda; color: var(--warning); }
+  .badge.closed { background: #fcebeb; color: var(--danger); }
+  .empty-msg, .loading-msg {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 2rem 0;
+  }
+  .job-link {
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Job board</h1>
+  <p>Local listings you add, plus live international openings</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" id="tabLocal" onclick="showTab('local')">Local</button>
+  <button class="tab-btn" id="tabIntl" onclick="showTab('intl')">International</button>
+</div>
+
+<main>
+  <div id="localPanel"><p class="loading-msg">Loading local jobs...</p></div>
+  <div id="intlPanel" style="display:none;"><p class="loading-msg">Loading international jobs...</p></div>
+</main>
+
+<script>
+function daysBetween(dateStr) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const target = new Date(dateStr);
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderJob(job) {
+  const daysLeft = daysBetween(job.last_date);
+  const expired = daysLeft < 0;
+  let badge = '';
+  if (expired) badge = '<span class="badge closed">Closed</span>';
+  else if (daysLeft <= 3) badge = '<span class="badge soon">Closing soon</span>';
+
+  const linkHtml = job.link
+    ? `<a class="job-link" href="${job.link}" target="_blank" rel="noopener">View posting</a>`
+    : '';
+
+  return `
+    <div class="job-card ${expired ? 'expired' : ''}">
+      <p class="job-title">${job.title}${badge}</p>
+      <p class="job-meta">${job.company ? job.company + ' — ' : ''}${job.location}</p>
+      <div class="job-dates">
+        <span>Posted: ${formatDate(job.posted)}</span>
+        <span>Last date: ${formatDate(job.last_date)}</span>
+      </div>
+      ${linkHtml ? `<div style="margin-top:8px;">${linkHtml}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderList(container, jobs, emptyText) {
+  if (!jobs.length) {
+    container.innerHTML = `<p class="empty-msg">${emptyText}</p>`;
+    return;
+  }
+  jobs.sort((a, b) => new Date(a.last_date) - new Date(b.last_date));
+  container.innerHTML = jobs.map(renderJob).join('');
+}
+
+// Load local jobs from jobs.json (edit this file to add new postings)
+fetch('jobs.json')
+  .then(r => r.json())
+  .then(jobs => {
+    renderList(document.getElementById('localPanel'), jobs, 'No local jobs posted yet.');
+  })
+  .catch(() => {
+    document.getElementById('localPanel').innerHTML =
+      '<p class="empty-msg">Could not load jobs.json. Make sure it is in the same folder as this page.</p>';
+  });
+
+// Load international jobs live from ReliefWeb's free public API (engineering-related, humanitarian sector)
+fetch('https://api.reliefweb.int/v1/jobs?appname=jobboard&query[value]=engineer&query[fields][]=title&limit=15&sort[]=date.created:desc')
+  .then(r => r.json())
+  .then(data => {
+    const jobs = (data.data || []).map(item => {
+      const f = item.fields;
+      return {
+        title: f.title,
+        company: (f.source && f.source[0] && f.source[0].name) || '',
+        location: (f.country && f.country[0] && f.country[0].name) || 'International',
+        posted: f.date && f.date.created,
+        last_date: f.date && (f.date.closing || f.date.created),
+        link: f.url_alias || f.url || ''
+      };
+    });
+    renderList(document.getElementById('intlPanel'), jobs, 'No international jobs found right now.');
+  })
+  .catch(() => {
+    document.getElementById('intlPanel').innerHTML =
+      '<p class="empty-msg">Could not fetch international jobs right now. Check your internet connection.</p>';
+  });
+
+function showTab(tab) {
+  document.getElementById('localPanel').style.display = tab === 'local' ? 'block' : 'none';
+  document.getElementById('intlPanel').style.display = tab === 'intl' ? 'block' : 'none';
+  document.getElementById('tabLocal').classList.toggle('active', tab === 'local');
+  document.getElementById('tabIntl').classList.toggle('active', tab === 'intl');
+}
+</script>
+
+</body>
+</html>
